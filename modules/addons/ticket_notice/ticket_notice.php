@@ -148,9 +148,24 @@ function ticket_notice_output($vars)
         if ($input === '') {
             $error = '保存失败：规则不能为空。';
         } else {
-            $decoded = json_decode($input, true);
+            $candidates = [
+                $input,
+                html_entity_decode($input, ENT_QUOTES, 'UTF-8'),
+                stripslashes($input),
+                stripslashes(html_entity_decode($input, ENT_QUOTES, 'UTF-8')),
+            ];
+
+            $decoded = null;
+            foreach ($candidates as $candidate) {
+                $tmp = json_decode($candidate, true);
+                if (is_array($tmp)) {
+                    $decoded = $tmp;
+                    break;
+                }
+            }
+
             if (!is_array($decoded)) {
-                $error = '保存失败：JSON 格式无效。';
+                $error = '保存失败：JSON 格式无效。请检查括号、引号和逗号。';
             } else {
                 try {
                     ticket_notice_set_stored_rules_json(json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
