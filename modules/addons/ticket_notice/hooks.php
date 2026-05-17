@@ -10,6 +10,7 @@ if (!function_exists('ticket_notice_default_rules_zh')) {
     require_once __DIR__ . '/ticket_notice.php';
 }
 
+if (!function_exists('ticket_notice_load_settings')) {
 function ticket_notice_load_settings()
 {
     $settings = [
@@ -32,7 +33,9 @@ function ticket_notice_load_settings()
 
     return $settings;
 }
+}
 
+if (!function_exists('ticket_notice_detect_lang')) {
 function ticket_notice_detect_lang($vars)
 {
     $lang = '';
@@ -41,23 +44,30 @@ function ticket_notice_detect_lang($vars)
     } elseif (isset($_SESSION['Language'])) {
         $lang = strtolower((string) $_SESSION['Language']);
     }
+
     if (strpos($lang, 'chinese') !== false || strpos($lang, 'zh') !== false || strpos($lang, 'cn') !== false) {
         return 'zh';
     }
+
     return 'en';
 }
+}
 
+if (!function_exists('ticket_notice_select_rules')) {
 function ticket_notice_select_rules($settings, $lang)
 {
     $raw = trim((string) ($lang === 'zh' ? $settings['rules_json_zh'] : $settings['rules_json_en']));
     if ($raw === '') {
         return $lang === 'zh' ? ticket_notice_default_rules_zh() : ticket_notice_default_rules_en();
     }
+
     $decoded = json_decode($raw, true);
     if (!is_array($decoded)) {
         return $lang === 'zh' ? ticket_notice_default_rules_zh() : ticket_notice_default_rules_en();
     }
+
     return $decoded;
+}
 }
 
 add_hook('ClientAreaFooterOutput', 1, function ($vars) {
@@ -67,8 +77,7 @@ add_hook('ClientAreaFooterOutput', 1, function ($vars) {
     }
 
     $settings = ticket_notice_load_settings();
-    $enabled = ((string) $settings['enabled']) === 'on';
-    if (!$enabled) {
+    if (((string) $settings['enabled']) !== 'on') {
         return '';
     }
 
@@ -79,31 +88,51 @@ add_hook('ClientAreaFooterOutput', 1, function ($vars) {
     }
 
     $rulesJson = json_encode($ticketNoticeRules, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($rulesJson === false) {
+    $modalI18n = $lang === 'zh'
+        ? [
+            'modalTitle' => '提交工单前请阅读',
+            'confirmLabel' => '我已阅读并理解以上内容',
+            'checkboxError' => '请先勾选确认后再继续提交。',
+            'btnCancel' => '返回修改',
+            'btnProceed' => '确认并提交',
+            'defaultTitle' => '提交工单提醒',
+        ]
+        : [
+            'modalTitle' => 'Please read before submitting',
+            'confirmLabel' => 'I have read and understood the above content',
+            'checkboxError' => 'Please check confirmation before continuing.',
+            'btnCancel' => 'Back to edit',
+            'btnProceed' => 'Confirm and submit',
+            'defaultTitle' => 'Ticket Submission Notice',
+        ];
+    $modalI18nJson = json_encode($modalI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    if ($rulesJson === false || $modalI18nJson === false) {
         return '';
     }
 
     $moduleWebPath = 'modules/addons/ticket_notice';
     $html = [];
-    $html[] = '<link rel="stylesheet" href="' . $moduleWebPath . '/assets/css/ticket_notice.css?v=1.3.0">';
-    $html[] = '<script>window.ticketNoticeRules = ' . $rulesJson . ';</script>';
+    $html[] = '<link rel="stylesheet" href="' . $moduleWebPath . '/assets/css/ticket_notice.css?v=1.4.0">';
+    $html[] = '<script>window.ticketNoticeRules=' . $rulesJson . ';window.ticketNoticeI18n=' . $modalI18nJson . ';</script>';
+
     $modalTpl = __DIR__ . '/templates/modal.tpl';
     if (is_file($modalTpl)) {
         $html[] = file_get_contents($modalTpl);
     }
-    $html[] = '<script src="' . $moduleWebPath . '/assets/js/ticket_notice.js?v=1.3.0"></script>';
+
+    $html[] = '<script src="' . $moduleWebPath . '/assets/js/ticket_notice.js?v=1.4.0"></script>';
 
     return implode(PHP_EOL, $html);
 });
 
 add_hook('TicketOpenValidation', 1, function ($vars) {
     $settings = ticket_notice_load_settings();
-    $enabled = ((string) $settings['enabled']) === 'on';
-    if (!$enabled) {
+    if (((string) $settings['enabled']) !== 'on') {
         return [];
     }
 
-    $lang = ticket_notice_detect_lang([]);
+    $lang = ticket_notice_detect_lang($vars);
     $ticketNoticeRules = ticket_notice_select_rules($settings, $lang);
     if (empty($ticketNoticeRules)) {
         return [];
@@ -116,7 +145,9 @@ add_hook('TicketOpenValidation', 1, function ($vars) {
 
     $confirmed = isset($_POST['ticket_notice_confirmed']) ? (int) $_POST['ticket_notice_confirmed'] : 0;
     if ($confirmed !== 1) {
-        return $lang === 'zh' ? ['请先阅读并确认工单提交提醒后再提交工单。'] : ['Please read and confirm the ticket notice before submitting.'];
+        return $lang === 'zh'
+            ? ['请先阅读并确认工单提交提醒后再提交工单。']
+            : ['Please read and confirm the ticket notice before submitting.'];
     }
 
     return [];

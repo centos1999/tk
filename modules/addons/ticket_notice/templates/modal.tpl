@@ -15,13 +15,13 @@
                 <div class="checkbox ticket-notice-checkbox-wrapper">
                     <label>
                         <input type="checkbox" id="ticketNoticeConfirmCheckbox">
-                        我已阅读并理解以上内容
+                        <span id="ticketNoticeConfirmLabel">我已阅读并理解以上内容</span>
                     </label>
                 </div>
                 <p class="text-danger ticket-notice-checkbox-error" id="ticketNoticeCheckboxError">请先勾选确认后再继续提交。</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">返回修改</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal"><span id="ticketNoticeCancelBtn">返回修改</span></button>
                 <button type="button" class="btn btn-primary" id="ticketNoticeProceedBtn">确认并提交</button>
             </div>
         </div>

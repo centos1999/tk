@@ -17,7 +17,14 @@
         var $proceedBtn = $('#ticketNoticeProceedBtn');
 
         var rules = window.ticketNoticeRules || {};
+        var i18n = window.ticketNoticeI18n || {};
         var allowSubmit = false;
+
+        $('#ticketNoticeModalLabel').text(i18n.modalTitle || '提交工单前请阅读');
+        $('#ticketNoticeConfirmLabel').text(i18n.confirmLabel || '我已阅读并理解以上内容');
+        $('#ticketNoticeCheckboxError').text(i18n.checkboxError || '请先勾选确认后再继续提交。');
+        $('#ticketNoticeCancelBtn').text(i18n.btnCancel || '返回修改');
+        $('#ticketNoticeProceedBtn').text(i18n.btnProceed || '确认并提交');
 
         if (!$form.find('input[name="ticket_notice_confirmed"]').length) {
             $form.append('<input type="hidden" name="ticket_notice_confirmed" value="0">');
@@ -33,7 +40,7 @@
         }
 
         function renderModal(rule) {
-            $title.text(rule.title || '提交工单提醒');
+            $title.text(rule.title || i18n.defaultTitle || '提交工单提醒');
             $list.empty();
 
             var items = rule.items || [];
