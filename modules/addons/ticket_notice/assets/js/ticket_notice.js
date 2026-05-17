@@ -27,6 +27,13 @@
         $('#ticketNoticeCheckboxError').text(i18n.checkboxError || '请先勾选确认后再继续提交。');
         $('#ticketNoticeCancelBtn').text(i18n.btnCancel || '返回修改');
         $('#ticketNoticeProceedBtn').text(i18n.btnProceed || '确认并提交');
+        if (duplicateTicket && duplicateTicket.id) {
+            $('#ticketNoticeDuplicateText').text((i18n.dupWarn || 'You already have a pending ticket: ') + '#' + (duplicateTicket.tid || duplicateTicket.id));
+            if (duplicateTicket.url) {
+                $('#ticketNoticeDuplicateLink').attr('href', duplicateTicket.url).show();
+            }
+            $('#ticketNoticeDuplicateBlock').show();
+        }
 
         function getTextPayload() {
             var subject = ($form.find('input[name="subject"]').val() || '').toLowerCase();
@@ -105,7 +112,13 @@
         $form.on('submit.ticketNotice', function (e) {
             if (duplicateTicket && duplicateTicket.id) {
                 e.preventDefault();
-                alert((i18n.dupWarn || 'You already have a pending ticket: ') + '#' + (duplicateTicket.tid || duplicateTicket.id));
+                var txt = (i18n.dupWarn || 'You already have a pending ticket: ') + '#' + (duplicateTicket.tid || duplicateTicket.id);
+                $('#ticketNoticeDuplicateText').text(txt);
+                if (duplicateTicket.url) {
+                    $('#ticketNoticeDuplicateLink').attr('href', duplicateTicket.url).show();
+                }
+                $('#ticketNoticeDuplicateBlock').show();
+                $modal.modal('show');
                 return false;
             }
             if (allowSubmit) {

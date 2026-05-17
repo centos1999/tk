@@ -183,6 +183,9 @@ add_hook('ClientAreaFooterOutput', 1, function ($vars) {
     $userId = isset($_SESSION['uid']) ? (int) $_SESSION['uid'] : 0;
     $deptId = isset($_REQUEST['deptid']) ? (int) $_REQUEST['deptid'] : 0;
     $dup = ticket_notice_find_duplicate_ticket($userId, $deptId);
+    if ($dup) {
+        $dup->url = 'viewticket.php?tid=' . (isset($dup->tid) ? $dup->tid : $dup->id);
+    }
     $dupJson = json_encode($dup, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if ($dupJson === false) { $dupJson = 'null'; }
 

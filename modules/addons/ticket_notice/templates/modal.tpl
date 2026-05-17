@@ -25,6 +25,10 @@
                     </label>
                 </div>
                 <p class="text-danger ticket-notice-checkbox-error" id="ticketNoticeCheckboxError">请先勾选确认后再继续提交。</p>
+                <div class="alert alert-warning" id="ticketNoticeDuplicateBlock" style="display:none; margin-top:10px;">
+                    <div id="ticketNoticeDuplicateText"></div>
+                    <a href="#" id="ticketNoticeDuplicateLink" class="btn btn-warning btn-sm" style="margin-top:8px; display:none;">查看已有工单</a>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal"><span id="ticketNoticeCancelBtn">返回修改</span></button>
