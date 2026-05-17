@@ -6,6 +6,10 @@ if (!defined('WHMCS')) {
     die('This file cannot be accessed directly');
 }
 
+if (function_exists('ticket_notice_config')) {
+    return;
+}
+
 function ticket_notice_default_rules()
 {
     return [
