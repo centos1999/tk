@@ -17,12 +17,16 @@ function ticket_notice_load_settings()
         'enabled' => 'on',
         'rules_json_zh' => '',
         'rules_json_en' => '',
+        'duplicate_enabled' => 'on',
+        'duplicate_hours' => '24',
+        'keyword_rules_zh' => '',
+        'keyword_rules_en' => '',
     ];
 
     try {
         $rows = Capsule::table('tbladdonmodules')
             ->where('module', 'ticket_notice')
-            ->whereIn('setting', ['enabled', 'rules_json_zh', 'rules_json_en'])
+            ->whereIn('setting', ['enabled', 'rules_json_zh', 'rules_json_en', 'duplicate_enabled', 'duplicate_hours', 'keyword_rules_zh', 'keyword_rules_en'])
             ->get(['setting', 'value']);
 
         foreach ($rows as $row) {
@@ -73,6 +77,14 @@ function ticket_notice_select_rules($settings, $lang)
 if (!function_exists('ticket_notice_keyword_rules')) {
 function ticket_notice_keyword_rules($lang)
 {
+    $settings = ticket_notice_load_settings();
+    $raw = $lang === 'zh' ? trim((string) $settings['keyword_rules_zh']) : trim((string) $settings['keyword_rules_en']);
+    if ($raw !== '') {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+    }
     if ($lang === 'zh') {
         return [[
             'keywords_any' => ['解析', 'dns', 'ttl', 'cloudflare'],
@@ -105,7 +117,15 @@ function ticket_notice_find_duplicate_ticket($userId, $deptId)
         return null;
     }
 
-    $since = date('Y-m-d H:i:s', time() - 86400);
+    $settings = ticket_notice_load_settings();
+    if ((string) $settings['duplicate_enabled'] !== 'on') {
+        return null;
+    }
+    $hours = (int) $settings['duplicate_hours'];
+    if ($hours <= 0) {
+        $hours = 24;
+    }
+    $since = date('Y-m-d H:i:s', time() - ($hours * 3600));
     return Capsule::table('tbltickets')
         ->where('userid', $userId)
         ->where('did', $deptId)

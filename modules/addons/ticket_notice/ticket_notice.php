@@ -13,7 +13,7 @@ if (!function_exists('ticket_notice_default_rules_en')) {
 function ticket_notice_default_rules_en(){return [1=>['title'=>'DNS Reminder','items'=>['DNS updates may take time to propagate.','Please provide the full domain name (e.g. example.com).','If using Cloudflare, disable proxy (orange cloud) for testing first.'],'warning'=>'Incomplete details may delay processing.'],2=>['title'=>'Abuse Report Reminder','items'=>['Please provide the full URL (including protocol).','Please upload screenshot evidence.','Please describe the violation reason and impact.'],'warning'=>'Missing evidence or unclear description may delay handling.'],3=>['title'=>'VPS Technical Support Reminder','items'=>['Please provide the server IP.','Please provide error screenshots or logs.','Please describe reproduction steps and expected result.'],'warning'=>'Missing key details may require back-and-forth communication.']];}
 }
 if (!function_exists('ticket_notice_config')) {
-function ticket_notice_config(){return ['name'=>'Ticket Notice','description'=>'Show department-based reminders before ticket submission.','version'=>'1.4.0','author'=>'Custom','language'=>'english','fields'=>['enabled'=>['FriendlyName'=>'Enable Ticket Notice','Type'=>'yesno','Description'=>'Enable pre-submit reminder interception.','Default'=>'on'],'rules_json_zh'=>['FriendlyName'=>'Rules JSON (Chinese)','Type'=>'textarea','Rows'=>'8','Cols'=>'100','Description'=>'中文规则 JSON（可不手工修改）','Default'=>json_encode(ticket_notice_default_rules_zh(),JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)],'rules_json_en'=>['FriendlyName'=>'Rules JSON (English)','Type'=>'textarea','Rows'=>'8','Cols'=>'100','Description'=>'English rules JSON (optional to edit manually)','Default'=>json_encode(ticket_notice_default_rules_en(),JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)]]];}
+function ticket_notice_config(){return ['name'=>'Ticket Notice','description'=>'Show department-based reminders before ticket submission.','version'=>'1.5.0','author'=>'Custom','language'=>'english','fields'=>['enabled'=>['FriendlyName'=>'Enable Ticket Notice','Type'=>'yesno','Description'=>'Enable pre-submit reminder interception.','Default'=>'on'],'rules_json_zh'=>['FriendlyName'=>'Rules JSON (Chinese)','Type'=>'textarea','Rows'=>'8','Cols'=>'100','Description'=>'中文规则 JSON（可不手工修改）','Default'=>json_encode(ticket_notice_default_rules_zh(),JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)],'rules_json_en'=>['FriendlyName'=>'Rules JSON (English)','Type'=>'textarea','Rows'=>'8','Cols'=>'100','Description'=>'English rules JSON (optional to edit manually)','Default'=>json_encode(ticket_notice_default_rules_en(),JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES)],'duplicate_enabled'=>['FriendlyName'=>'Enable Duplicate Blocking','Type'=>'yesno','Description'=>'Block duplicate ticket in same dept/time window','Default'=>'on'],'duplicate_hours'=>['FriendlyName'=>'Duplicate Window Hours','Type'=>'text','Size'=>'8','Default'=>'24'],'keyword_rules_zh'=>['FriendlyName'=>'Keyword Rules JSON (Chinese)','Type'=>'textarea','Rows'=>'8','Cols'=>'100','Default'=>'[]'],'keyword_rules_en'=>['FriendlyName'=>'Keyword Rules JSON (English)','Type'=>'textarea','Rows'=>'8','Cols'=>'100','Default'=>'[]']]];}
 }
 if (!function_exists('ticket_notice_activate')) { function ticket_notice_activate(){ return ['status'=>'success','description'=>'Ticket Notice activated']; } }
 if (!function_exists('ticket_notice_deactivate')) { function ticket_notice_deactivate(){ return ['status'=>'success','description'=>'Ticket Notice deactivated']; } }
@@ -49,7 +49,15 @@ function ticket_notice_output($vars)
                 if($error===''){
                     ticket_notice_set_setting('rules_json_zh',json_encode($zh,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
                     ticket_notice_set_setting('rules_json_en',json_encode($en,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
-                    $message='中英文规则已保存。';
+                    ticket_notice_set_setting('duplicate_enabled', isset($_POST['duplicate_enabled']) ? 'on' : '');
+                    $dupHours = isset($_POST['duplicate_hours']) ? (int) $_POST['duplicate_hours'] : 24;
+                    if ($dupHours <= 0) { $dupHours = 24; }
+                    ticket_notice_set_setting('duplicate_hours', (string) $dupHours);
+                    $kwZh = ticket_notice_decode_rules_input(isset($_POST['keyword_rules_zh']) ? (string) $_POST['keyword_rules_zh'] : '[]');
+                    $kwEn = ticket_notice_decode_rules_input(isset($_POST['keyword_rules_en']) ? (string) $_POST['keyword_rules_en'] : '[]');
+                    ticket_notice_set_setting('keyword_rules_zh', json_encode(is_array($kwZh) ? $kwZh : [], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+                    ticket_notice_set_setting('keyword_rules_en', json_encode(is_array($kwEn) ? $kwEn : [], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
+                    $message='中英文规则与智能配置已保存。';
                 }
             }
         }
@@ -68,7 +76,16 @@ function ticket_notice_output($vars)
 
     echo '<form method="post" id="ticketNoticeBilingualForm"><input type="hidden" name="ticket_notice_save_bilingual" value="1"><input type="hidden" name="token" value="'.(isset($_SESSION['token'])?htmlspecialchars((string)$_SESSION['token'],ENT_QUOTES,'UTF-8'):'').'"><textarea id="ticketNoticeRowsJson" name="ticket_notice_rows_json" style="display:none"></textarea>';
     echo '<table class="table table-bordered" id="ticketNoticeRuleTable"><thead><tr><th>部门</th><th>中文标题(1)</th><th>中文提醒项(1)</th><th>中文警告(1)</th><th>English Title (2)</th><th>English Items (2)</th><th>English Warning (2)</th><th>操作</th></tr></thead><tbody></tbody></table>';
-    echo '<p><button type="button" class="btn btn-default" id="ticketNoticeAddRow">+ 添加规则</button> <button type="submit" class="btn btn-primary">保存双语规则</button></p></form>';
+    $dupEnabled = ticket_notice_get_setting('duplicate_enabled');
+    $dupHours = ticket_notice_get_setting('duplicate_hours'); if ($dupHours === '') { $dupHours = '24'; }
+    $kwZhCurrent = ticket_notice_get_setting('keyword_rules_zh'); if ($kwZhCurrent === '') { $kwZhCurrent = '[]'; }
+    $kwEnCurrent = ticket_notice_get_setting('keyword_rules_en'); if ($kwEnCurrent === '') { $kwEnCurrent = '[]'; }
+    echo '<p><button type="button" class="btn btn-default" id="ticketNoticeAddRow">+ 添加规则</button> <button type="submit" class="btn btn-primary">保存双语规则</button></p>';
+    echo '<hr><h4>重复工单检测配置</h4>';
+    echo '<p><label><input type="checkbox" name="duplicate_enabled" ' . ($dupEnabled === 'on' ? 'checked' : '') . '> 启用重复工单拦截</label> 时间窗口(小时): <input type="number" min="1" name="duplicate_hours" value="' . htmlspecialchars((string) $dupHours, ENT_QUOTES, 'UTF-8') . '" style="width:90px"></p>';
+    echo '<h4>关键词智能规则（中文 JSON）</h4><textarea name="keyword_rules_zh" rows="6" style="width:100%;">' . htmlspecialchars((string) $kwZhCurrent, ENT_QUOTES, 'UTF-8') . '</textarea>';
+    echo '<h4>Keyword Smart Rules (English JSON)</h4><textarea name="keyword_rules_en" rows="6" style="width:100%;">' . htmlspecialchars((string) $kwEnCurrent, ENT_QUOTES, 'UTF-8') . '</textarea>';
+    echo '</form>';
 
     $rowsJson=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); if($rowsJson===false)$rowsJson='[]';
     $depsJson=json_encode($departments,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); if($depsJson===false)$depsJson='[]';
