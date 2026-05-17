@@ -1,42 +1,63 @@
 <?php
 
+use WHMCS\Database\Capsule;
+
 if (!defined('WHMCS')) {
     die('This file cannot be accessed directly');
 }
 
-$ticketNoticeRules = [
-    1 => [
-        'title' => 'DNS解析提醒',
-        'items' => [
-            'DNS修改后可能需要时间同步（通常数分钟到48小时）',
-            '请提供完整域名（例如：example.com）',
-            '若使用 Cloudflare，请先关闭代理（橙云）测试',
-        ],
-        'warning' => '信息不完整会导致处理时间延长。',
-    ],
-    2 => [
-        'title' => 'Abuse 举报提醒',
-        'items' => [
-            '请提供完整 URL（包含协议）',
-            '请上传截图证据',
-            '请描述违规原因与影响范围',
-        ],
-        'warning' => '无证据或描述不清晰将无法快速受理。',
-    ],
-    3 => [
-        'title' => 'VPS 技术支持提醒',
-        'items' => [
-            '请提供服务器 IP',
-            '请提供报错截图或错误日志',
-            '请说明复现步骤与预期结果',
-        ],
-        'warning' => '缺少关键信息可能导致需要反复沟通。',
-    ],
-];
+if (!function_exists('ticket_notice_default_rules')) {
+    require_once __DIR__ . '/ticket_notice.php';
+}
 
-add_hook('ClientAreaFooterOutput', 1, function ($vars) use ($ticketNoticeRules) {
+function ticket_notice_load_settings()
+{
+    $settings = [
+        'enabled' => 'on',
+        'rules_json' => '',
+    ];
+
+    try {
+        $rows = Capsule::table('tbladdonmodules')
+            ->where('module', 'ticket_notice')
+            ->whereIn('setting', ['enabled', 'rules_json'])
+            ->get(['setting', 'value']);
+
+        foreach ($rows as $row) {
+            $settings[$row->setting] = (string) $row->value;
+        }
+    } catch (\Exception $e) {
+        // fallback to defaults
+    }
+
+    return $settings;
+}
+
+function ticket_notice_load_rules()
+{
+    $settings = ticket_notice_load_settings();
+    $raw = trim((string) $settings['rules_json']);
+
+    if ($raw === '') {
+        return [((string) $settings['enabled']) === 'on', ticket_notice_default_rules()];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [((string) $settings['enabled']) === 'on', ticket_notice_default_rules()];
+    }
+
+    return [((string) $settings['enabled']) === 'on', $decoded];
+}
+
+add_hook('ClientAreaFooterOutput', 1, function ($vars) {
     $filename = isset($vars['filename']) ? $vars['filename'] : '';
     if ($filename !== 'submitticket') {
+        return '';
+    }
+
+    list($enabled, $ticketNoticeRules) = ticket_notice_load_rules();
+    if (!$enabled || empty($ticketNoticeRules)) {
         return '';
     }
 
@@ -48,7 +69,7 @@ add_hook('ClientAreaFooterOutput', 1, function ($vars) use ($ticketNoticeRules) 
     $moduleWebPath = 'modules/addons/ticket_notice';
 
     $html = [];
-    $html[] = '<link rel="stylesheet" href="' . $moduleWebPath . '/assets/css/ticket_notice.css?v=1.0.0">';
+    $html[] = '<link rel="stylesheet" href="' . $moduleWebPath . '/assets/css/ticket_notice.css?v=1.1.0">';
     $html[] = '<script>window.ticketNoticeRules = ' . $rulesJson . ';</script>';
 
     $modalTpl = __DIR__ . '/templates/modal.tpl';
@@ -56,15 +77,20 @@ add_hook('ClientAreaFooterOutput', 1, function ($vars) use ($ticketNoticeRules) 
         $html[] = file_get_contents($modalTpl);
     }
 
-    $html[] = '<script src="' . $moduleWebPath . '/assets/js/ticket_notice.js?v=1.0.0"></script>';
+    $html[] = '<script src="' . $moduleWebPath . '/assets/js/ticket_notice.js?v=1.1.0"></script>';
 
     return implode(PHP_EOL, $html);
 });
 
-add_hook('TicketOpenValidation', 1, function ($vars) use ($ticketNoticeRules) {
+add_hook('TicketOpenValidation', 1, function ($vars) {
+    list($enabled, $ticketNoticeRules) = ticket_notice_load_rules();
+    if (!$enabled || empty($ticketNoticeRules)) {
+        return [];
+    }
+
     $deptId = isset($_POST['deptid']) ? (int) $_POST['deptid'] : 0;
 
-    if (!isset($ticketNoticeRules[$deptId])) {
+    if (!isset($ticketNoticeRules[$deptId]) && !isset($ticketNoticeRules[(string) $deptId])) {
         return [];
     }
 
