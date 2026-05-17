@@ -10,6 +10,7 @@ if (function_exists('ticket_notice_config')) {
     return;
 }
 
+if (!function_exists('ticket_notice_default_rules')) {
 function ticket_notice_default_rules()
 {
     return [
@@ -42,7 +43,10 @@ function ticket_notice_default_rules()
         ],
     ];
 }
+}
 
+
+if (!function_exists('ticket_notice_config')) {
 function ticket_notice_config()
 {
     return [
@@ -69,17 +73,26 @@ function ticket_notice_config()
         ],
     ];
 }
+}
 
+
+if (!function_exists('ticket_notice_activate')) {
 function ticket_notice_activate()
 {
     return ['status' => 'success', 'description' => 'Ticket Notice activated'];
 }
+}
 
+
+if (!function_exists('ticket_notice_deactivate')) {
 function ticket_notice_deactivate()
 {
     return ['status' => 'success', 'description' => 'Ticket Notice deactivated'];
 }
+}
 
+
+if (!function_exists('ticket_notice_get_stored_rules_json')) {
 function ticket_notice_get_stored_rules_json()
 {
     try {
@@ -96,7 +109,10 @@ function ticket_notice_get_stored_rules_json()
 
     return json_encode(ticket_notice_default_rules(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 }
+}
 
+
+if (!function_exists('ticket_notice_set_stored_rules_json')) {
 function ticket_notice_set_stored_rules_json($json)
 {
     $exists = Capsule::table('tbladdonmodules')
@@ -118,7 +134,10 @@ function ticket_notice_set_stored_rules_json($json)
         'value' => $json,
     ]);
 }
+}
 
+
+if (!function_exists('ticket_notice_output')) {
 function ticket_notice_output($vars)
 {
     $message = '';
@@ -198,3 +217,5 @@ function ticket_notice_output($vars)
         . '});\n'
         . '})();</script>';
 }
+}
+
