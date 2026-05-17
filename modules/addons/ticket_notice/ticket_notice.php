@@ -180,41 +180,42 @@ function ticket_notice_output($vars)
     echo '<table class="table table-bordered" id="ticketNoticeRuleTable">';
     echo '<thead><tr><th style="width:120px;">部门ID</th><th style="width:180px;">标题</th><th>提醒项（每行一条）</th><th>红字警告</th><th style="width:90px;">操作</th></tr></thead><tbody></tbody></table>';
     echo '<p><button type="button" class="btn btn-default" id="ticketNoticeAddRow">+ 添加规则</button></p>';
-    echo '<textarea name="ticket_notice_rules_json" id="ticketNoticeRulesJson" rows="12" style="width:100%;display:none;">' . $safeRulesJson . '</textarea>';
+    echo '<textarea name="ticket_notice_rules_json" id="ticketNoticeRulesJson" rows="12" style="width:100%;">' . $safeRulesJson . '</textarea>';
+    echo '<p class="text-muted" style="margin-top:6px;">可视化编辑不可用时，可直接修改以上 JSON。</p>';
     echo '<p><button type="submit" class="btn btn-primary">保存规则</button></p>';
     echo '</form>';
 
-    echo '<script>(function(){\n'
-        . 'var raw=document.getElementById("ticketNoticeRulesJson").value||"{}";\n'
-        . 'var tableBody=document.querySelector("#ticketNoticeRuleTable tbody");\n'
-        . 'function esc(v){return (v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;");}\n'
-        . 'function addRow(dept,title,items,warning){\n'
-        . 'var tr=document.createElement("tr");\n'
-        . 'tr.innerHTML="<td><input class=\"form-control tn-dept\" value=\""+esc(dept)+"\"></td>"+'
-        . '"<td><input class=\"form-control tn-title\" value=\""+esc(title)+"\"></td>"+'
-        . '"<td><textarea class=\"form-control tn-items\" rows=\"4\">"+esc((items||[]).join("\\n"))+"</textarea></td>"+'
-        . '"<td><input class=\"form-control tn-warning\" value=\""+esc(warning)+"\"></td>"+'
-        . '"<td><button type=\"button\" class=\"btn btn-danger btn-sm tn-del\">删除</button></td>";\n'
-        . 'tableBody.appendChild(tr);\n'
-        . '}\n'
-        . 'try{var obj=JSON.parse(raw);Object.keys(obj).forEach(function(k){var r=obj[k]||{};addRow(k,r.title||"",r.items||[],r.warning||"");});}catch(e){}\n'
-        . 'if(!tableBody.children.length){addRow("","",[],"");}\n'
-        . 'document.getElementById("ticketNoticeAddRow").addEventListener("click",function(){addRow("","",[],"");});\n'
-        . 'tableBody.addEventListener("click",function(e){if(e.target&&e.target.classList.contains("tn-del")){e.target.closest("tr").remove();}});\n'
-        . 'document.getElementById("ticketNoticeVisualForm").addEventListener("submit",function(e){\n'
-        . 'var data={}; var ok=true;\n'
-        . '[].slice.call(tableBody.querySelectorAll("tr")).forEach(function(tr){\n'
-        . 'var dept=(tr.querySelector(".tn-dept").value||"").trim();\n'
-        . 'if(!dept){return;}\n'
-        . 'if(!/^\\d+$/.test(dept)){ok=false; return;}\n'
-        . 'var title=(tr.querySelector(".tn-title").value||"").trim();\n'
-        . 'var warning=(tr.querySelector(".tn-warning").value||"").trim();\n'
-        . 'var items=(tr.querySelector(".tn-items").value||"").split(/\\n+/).map(function(v){return v.trim();}).filter(Boolean);\n'
-        . 'data[dept]={title:title,items:items,warning:warning};\n'
-        . '});\n'
-        . 'if(!ok){alert("部门ID必须是数字"); e.preventDefault(); return;}\n'
-        . 'document.getElementById("ticketNoticeRulesJson").value=JSON.stringify(data,null,2);\n'
-        . '});\n'
+    $rulesForJs = json_encode(json_decode($rulesJson, true), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($rulesForJs === false) {
+        $rulesForJs = '{}';
+    }
+
+    echo '<script>(function(){
+'
+        . 'var form=document.getElementById("ticketNoticeVisualForm"); if(!form){return;}
+'
+        . 'var tableBody=document.querySelector("#ticketNoticeRuleTable tbody");
+'
+        . 'var jsonField=document.getElementById("ticketNoticeRulesJson");
+'
+        . 'var addBtn=document.getElementById("ticketNoticeAddRow");
+'
+        . 'var source=' . $rulesForJs . ';
+'
+        . 'function esc(v){return (v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+'
+        . 'function addRow(dept,title,items,warning){var tr=document.createElement("tr"); tr.innerHTML="<td><input class=\"form-control tn-dept\" value=\""+esc(dept)+"\"></td>"+"<td><input class=\"form-control tn-title\" value=\""+esc(title)+"\"></td>"+"<td><textarea class=\"form-control tn-items\" rows=\"4\">"+esc((items||[]).join("\\n"))+"</textarea></td>"+"<td><input class=\"form-control tn-warning\" value=\""+esc(warning)+"\"></td>"+"<td><button type=\"button\" class=\"btn btn-danger btn-sm tn-del\">删除</button></td>"; tableBody.appendChild(tr);}
+'
+        . 'Object.keys(source||{}).forEach(function(k){var r=source[k]||{};addRow(k,r.title||"",Array.isArray(r.items)?r.items:[],r.warning||"");});
+'
+        . 'if(!tableBody.children.length){addRow("","",[],"");}
+'
+        . 'addBtn.onclick=function(){addRow("","",[],"");};
+'
+        . 'tableBody.onclick=function(e){var t=e.target||e.srcElement; if(t && t.className.indexOf("tn-del")!==-1){var tr=t; while(tr && tr.tagName!=="TR"){tr=tr.parentNode;} if(tr&&tr.parentNode){tr.parentNode.removeChild(tr);}}};
+'
+        . 'form.onsubmit=function(e){var data={}; var ok=true; var rows=tableBody.querySelectorAll("tr"); for(var i=0;i<rows.length;i++){var tr=rows[i]; var dept=(tr.querySelector(".tn-dept").value||"").trim(); if(!dept){continue;} if(!/^\\d+$/.test(dept)){ok=false; break;} var title=(tr.querySelector(".tn-title").value||"").trim(); var warning=(tr.querySelector(".tn-warning").value||"").trim(); var items=(tr.querySelector(".tn-items").value||"").split(/\\n+/).map(function(v){return v.trim();}).filter(function(v){return v;}); data[dept]={title:title,items:items,warning:warning}; } if(!ok){alert("部门ID必须是数字"); if(e&&e.preventDefault){e.preventDefault();} return false;} jsonField.value=JSON.stringify(data,null,2); return true;};
+'
         . '})();</script>';
 }
 }
