@@ -187,18 +187,44 @@ function ticket_notice_output($vars)
         $rowsJson = '[]';
     }
 
-    echo '<script>(function(){\n'
-        . 'var rows=' . $rowsJson . ';\n'
-        . 'var form=document.getElementById("ticketNoticeBilingualForm");\n'
-        . 'var tbody=document.querySelector("#ticketNoticeRuleTable tbody");\n'
-        . 'var hidden=document.getElementById("ticketNoticeRowsJson");\n'
-        . 'function esc(v){return (v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}\n'
-        . 'function rowHtml(r){return "<td><input class=\\"form-control tn-deptid\\" value=\\""+esc(r.deptid||"")+"\\"></td>"+"<td><input class=\\"form-control tn-title-zh\\" value=\\""+esc(r.title_zh||"")+"\\"></td>"+"<td><textarea class=\\"form-control tn-items-zh\\" rows=\\"3\\">"+esc((r.items_zh||[]).join("\\n"))+"</textarea></td>"+"<td><input class=\\"form-control tn-warning-zh\\" value=\\""+esc(r.warning_zh||"")+"\\"></td>"+"<td><input class=\\"form-control tn-title-en\\" value=\\""+esc(r.title_en||"")+"\\"></td>"+"<td><textarea class=\\"form-control tn-items-en\\" rows=\\"3\\">"+esc((r.items_en||[]).join("\\n"))+"</textarea></td>"+"<td><input class=\\"form-control tn-warning-en\\" value=\\""+esc(r.warning_en||"")+"\\"></td>"+"<td><button type=\\"button\\" class=\\"btn btn-danger btn-sm tn-del\\">删除</button></td>";}\n'
-        . 'function addRow(r){var tr=document.createElement("tr");tr.innerHTML=rowHtml(r||{});tbody.appendChild(tr);}\n'
-        . 'if(!rows.length){addRow({});}else{for(var i=0;i<rows.length;i++){addRow(rows[i]);}}\n'
-        . 'document.getElementById("ticketNoticeAddRow").onclick=function(){addRow({});};\n'
-        . 'tbody.onclick=function(e){var t=e.target||e.srcElement;if(t&&t.className.indexOf("tn-del")!==-1){var tr=t;while(tr&&tr.tagName!=="TR"){tr=tr.parentNode;}if(tr&&tr.parentNode){tr.parentNode.removeChild(tr);}}};\n'
-        . 'form.onsubmit=function(e){var out=[];var trs=tbody.querySelectorAll("tr");for(var i=0;i<trs.length;i++){var tr=trs[i];var deptid=(tr.querySelector(".tn-deptid").value||"").trim();if(!deptid){continue;}if(!/^\\d+$/.test(deptid)){alert("部门ID必须是数字");if(e&&e.preventDefault){e.preventDefault();}return false;}out.push({deptid:deptid,title_zh:(tr.querySelector(".tn-title-zh").value||"").trim(),items_zh:(tr.querySelector(".tn-items-zh").value||"").split(/\\n+/).map(function(v){return v.trim();}).filter(Boolean),warning_zh:(tr.querySelector(".tn-warning-zh").value||"").trim(),title_en:(tr.querySelector(".tn-title-en").value||"").trim(),items_en:(tr.querySelector(".tn-items-en").value||"").split(/\\n+/).map(function(v){return v.trim();}).filter(Boolean),warning_en:(tr.querySelector(".tn-warning-en").value||"").trim()});}hidden.value=JSON.stringify(out);return true;};\n'
+    echo '<script>(function(){
+'
+        . 'try {
+'
+        . 'var rows=' . $rowsJson . ';
+'
+        . 'if (!Array.isArray(rows)) { rows = []; }
+'
+        . 'var form=document.getElementById("ticketNoticeBilingualForm");
+'
+        . 'var tbody=document.querySelector("#ticketNoticeRuleTable tbody");
+'
+        . 'var hidden=document.getElementById("ticketNoticeRowsJson");
+'
+        . 'var addBtn=document.getElementById("ticketNoticeAddRow");
+'
+        . 'if(!form||!tbody||!hidden||!addBtn){return;}
+'
+        . 'function esc(v){return String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+'
+        . 'function mkInput(cls,val){return "<input class=\"form-control "+cls+"\" value=\""+esc(val)+"\">";}
+'
+        . 'function mkTextarea(cls,val){return "<textarea class=\"form-control "+cls+"\" rows=\"3\">"+esc(val)+"</textarea>";}
+'
+        . 'function rowHtml(r){r=r||{};return "<td>"+mkInput("tn-deptid",r.deptid||"")+"</td>"+"<td>"+mkInput("tn-title-zh",r.title_zh||"")+"</td>"+"<td>"+mkTextarea("tn-items-zh",(r.items_zh||[]).join("\n"))+"</td>"+"<td>"+mkInput("tn-warning-zh",r.warning_zh||"")+"</td>"+"<td>"+mkInput("tn-title-en",r.title_en||"")+"</td>"+"<td>"+mkTextarea("tn-items-en",(r.items_en||[]).join("\n"))+"</td>"+"<td>"+mkInput("tn-warning-en",r.warning_en||"")+"</td>"+"<td><button type=\"button\" class=\"btn btn-danger btn-sm tn-del\">删除</button></td>";}
+'
+        . 'function addRow(r){var tr=document.createElement("tr");tr.innerHTML=rowHtml(r);tbody.appendChild(tr);}
+'
+        . 'if(rows.length===0){addRow({});}else{for(var i=0;i<rows.length;i++){addRow(rows[i]);}}
+'
+        . 'addBtn.addEventListener("click", function(){ addRow({}); });
+'
+        . 'tbody.addEventListener("click", function(e){var t=e.target||e.srcElement; if(t && t.className && t.className.indexOf("tn-del")!==-1){var tr=t; while(tr && tr.tagName!=="TR"){tr=tr.parentNode;} if(tr && tr.parentNode){tr.parentNode.removeChild(tr);}}});
+'
+        . 'form.addEventListener("submit", function(e){var out=[]; var trs=tbody.querySelectorAll("tr"); for(var i=0;i<trs.length;i++){var tr=trs[i]; var deptid=(tr.querySelector(".tn-deptid").value||"").trim(); if(!deptid){continue;} if(!/^\d+$/.test(deptid)){alert("部门ID必须是数字"); e.preventDefault(); return false;} out.push({deptid:deptid,title_zh:(tr.querySelector(".tn-title-zh").value||"").trim(),items_zh:(tr.querySelector(".tn-items-zh").value||"").split(/\n+/).map(function(v){return v.trim();}).filter(Boolean),warning_zh:(tr.querySelector(".tn-warning-zh").value||"").trim(),title_en:(tr.querySelector(".tn-title-en").value||"").trim(),items_en:(tr.querySelector(".tn-items-en").value||"").split(/\n+/).map(function(v){return v.trim();}).filter(Boolean),warning_en:(tr.querySelector(".tn-warning-en").value||"").trim()}); } hidden.value=JSON.stringify(out); });
+'
+        . '} catch(err) { console && console.error && console.error("ticket_notice admin editor error", err); }
+'
         . '})();</script>';
 }
 }
