@@ -1,0 +1,23 @@
+#ticketNoticeModal .ticket-notice-title {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 20px;
+}
+
+#ticketNoticeModal .ticket-notice-list {
+    margin-left: 18px;
+}
+
+#ticketNoticeModal .ticket-notice-warning {
+    margin-top: 12px;
+    font-weight: 600;
+}
+
+#ticketNoticeModal .ticket-notice-checkbox-wrapper {
+    margin-top: 12px;
+}
+
+#ticketNoticeModal .ticket-notice-checkbox-error {
+    display: none;
+    margin-top: 8px;
+}
