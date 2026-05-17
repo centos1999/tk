@@ -70,6 +70,52 @@ function ticket_notice_select_rules($settings, $lang)
 }
 }
 
+if (!function_exists('ticket_notice_keyword_rules')) {
+function ticket_notice_keyword_rules($lang)
+{
+    if ($lang === 'zh') {
+        return [[
+            'keywords_any' => ['解析', 'dns', 'ttl', 'cloudflare'],
+            'keywords_all' => ['不生效'],
+            'title' => '检测到您可能遇到：DNS缓存问题',
+            'suggestions' => ['等待TTL生效', '清理本地DNS缓存', '使用 8.8.8.8 测试解析'],
+            'links' => [
+                ['label' => 'Cloudflare 教程', 'url' => 'https://developers.cloudflare.com/dns/'],
+                ['label' => '橙云说明', 'url' => 'https://developers.cloudflare.com/dns/manage-dns-records/reference/proxied-dns-records/'],
+            ],
+        ]];
+    }
+
+    return [[
+        'keywords_any' => ['dns', 'ttl', 'cloudflare', 'propagation'],
+        'keywords_all' => ['not working'],
+        'title' => 'You may be facing a DNS cache/propagation issue',
+        'suggestions' => ['Wait for TTL to propagate', 'Flush local DNS cache', 'Test resolution with 8.8.8.8'],
+        'links' => [
+            ['label' => 'Cloudflare DNS Guide', 'url' => 'https://developers.cloudflare.com/dns/'],
+        ],
+    ]];
+}
+}
+
+if (!function_exists('ticket_notice_find_duplicate_ticket')) {
+function ticket_notice_find_duplicate_ticket($userId, $deptId)
+{
+    if ($userId <= 0 || $deptId <= 0) {
+        return null;
+    }
+
+    $since = date('Y-m-d H:i:s', time() - 86400);
+    return Capsule::table('tbltickets')
+        ->where('userid', $userId)
+        ->where('did', $deptId)
+        ->whereNotIn('status', ['Closed', 'Resolved'])
+        ->where('date', '>=', $since)
+        ->orderBy('id', 'desc')
+        ->first(['id', 'tid', 'status']);
+}
+}
+
 add_hook('ClientAreaFooterOutput', 1, function ($vars) {
     $filename = isset($vars['filename']) ? $vars['filename'] : '';
     if ($filename !== 'submitticket') {
@@ -105,16 +151,25 @@ add_hook('ClientAreaFooterOutput', 1, function ($vars) {
             'btnProceed' => 'Confirm and submit',
             'defaultTitle' => 'Ticket Submission Notice',
         ];
+    $modalI18n['smartTitle'] = $lang === 'zh' ? '智能建议' : 'Smart Suggestions';
+    $modalI18n['dupWarn'] = $lang === 'zh' ? '您已有待处理工单：' : 'You already have a pending ticket:';
     $modalI18nJson = json_encode($modalI18n, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $keywordRulesJson = json_encode(ticket_notice_keyword_rules($lang), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-    if ($rulesJson === false || $modalI18nJson === false) {
+    if ($rulesJson === false || $modalI18nJson === false || $keywordRulesJson === false) {
         return '';
     }
+
+    $userId = isset($_SESSION['uid']) ? (int) $_SESSION['uid'] : 0;
+    $deptId = isset($_REQUEST['deptid']) ? (int) $_REQUEST['deptid'] : 0;
+    $dup = ticket_notice_find_duplicate_ticket($userId, $deptId);
+    $dupJson = json_encode($dup, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($dupJson === false) { $dupJson = 'null'; }
 
     $moduleWebPath = 'modules/addons/ticket_notice';
     $html = [];
     $html[] = '<link rel="stylesheet" href="' . $moduleWebPath . '/assets/css/ticket_notice.css?v=1.4.0">';
-    $html[] = '<script>window.ticketNoticeRules=' . $rulesJson . ';window.ticketNoticeI18n=' . $modalI18nJson . ';</script>';
+    $html[] = '<script>window.ticketNoticeRules=' . $rulesJson . ';window.ticketNoticeI18n=' . $modalI18nJson . ';window.ticketNoticeKeywordRules=' . $keywordRulesJson . ';window.ticketNoticeDuplicate=' . $dupJson . ';</script>';
 
     $modalTpl = __DIR__ . '/templates/modal.tpl';
     if (is_file($modalTpl)) {
@@ -139,6 +194,15 @@ add_hook('TicketOpenValidation', 1, function ($vars) {
     }
 
     $deptId = isset($_POST['deptid']) ? (int) $_POST['deptid'] : 0;
+
+    $userId = isset($_SESSION['uid']) ? (int) $_SESSION['uid'] : 0;
+    $dup = ticket_notice_find_duplicate_ticket($userId, $deptId);
+    if ($dup) {
+        $ticketNo = isset($dup->tid) ? '#' . $dup->tid : '#' . $dup->id;
+        return $lang === 'zh'
+            ? ['您已有24小时内未关闭的同部门工单：' . $ticketNo . '，请勿重复提交。']
+            : ['You already have an unclosed ticket in this department within 24 hours: ' . $ticketNo . '.'];
+    }
     if (!isset($ticketNoticeRules[$deptId]) && !isset($ticketNoticeRules[(string) $deptId])) {
         return [];
     }

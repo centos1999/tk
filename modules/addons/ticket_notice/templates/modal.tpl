@@ -11,6 +11,12 @@
                 <h4 class="ticket-notice-title" id="ticketNoticeTitle"></h4>
                 <ul class="ticket-notice-list" id="ticketNoticeList"></ul>
                 <p class="ticket-notice-warning text-danger" id="ticketNoticeWarning"></p>
+                <div id="ticketNoticeSmartBlock" style="display:none;">
+                    <hr>
+                    <h5 id="ticketNoticeSmartTitle"></h5>
+                    <ul id="ticketNoticeSmartList"></ul>
+                    <div id="ticketNoticeSmartLinks"></div>
+                </div>
 
                 <div class="checkbox ticket-notice-checkbox-wrapper">
                     <label>
