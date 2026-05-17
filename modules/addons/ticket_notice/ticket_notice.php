@@ -21,6 +21,49 @@ if (!function_exists('ticket_notice_get_setting')) { function ticket_notice_get_
 if (!function_exists('ticket_notice_set_setting')) { function ticket_notice_set_setting($k,$v){ $q=Capsule::table('tbladdonmodules')->where('module','ticket_notice')->where('setting',$k); if($q->exists()){$q->update(['value'=>$v]);}else{Capsule::table('tbladdonmodules')->insert(['module'=>'ticket_notice','setting'=>$k,'value'=>$v]);}} }
 if (!function_exists('ticket_notice_get_departments')) { function ticket_notice_get_departments(){ try{$rows=Capsule::table('tblticketdepartments')->orderBy('order','asc')->orderBy('id','asc')->get(['id','name']); $out=[]; foreach($rows as $r){$out[]=['id'=>(int)$r->id,'name'=>(string)$r->name];} return $out;}catch(\Exception $e){return [];} } }
 if (!function_exists('ticket_notice_decode_rules_input')) { function ticket_notice_decode_rules_input($input){ foreach([$input,html_entity_decode((string)$input,ENT_QUOTES,'UTF-8'),stripslashes((string)$input)] as $c){$d=json_decode((string)$c,true); if(is_array($d)) return $d;} return null; } }
+if (!function_exists('ticket_notice_parse_keyword_lines')) {
+function ticket_notice_parse_keyword_lines($text, $lang)
+{
+    $text = trim((string) $text);
+    if ($text === '') {
+        return [];
+    }
+
+    $lines = preg_split('/\r\n|\r|\n/', $text);
+    $rules = [];
+    foreach ($lines as $line) {
+        $line = trim((string) $line);
+        if ($line === '' || strpos($line, ':') === false) {
+            continue;
+        }
+
+        list($kwPart, $answerPart) = explode(':', $line, 2);
+        $kwRaw = explode(',', $kwPart);
+        $keywords = [];
+        foreach ($kwRaw as $k) {
+            $k = trim((string) $k);
+            if ($k !== '') {
+                $keywords[] = $k;
+            }
+        }
+
+        $answer = trim((string) $answerPart);
+        if (empty($keywords) || $answer === '') {
+            continue;
+        }
+
+        $rules[] = [
+            'keywords_any' => $keywords,
+            'keywords_all' => [],
+            'title' => $lang === 'zh' ? '智能识别建议' : 'Smart Suggestion',
+            'suggestions' => [$answer],
+            'links' => [],
+        ];
+    }
+
+    return $rules;
+}
+}
 
 if (!function_exists('ticket_notice_output')) {
 function ticket_notice_output($vars)
@@ -53,8 +96,12 @@ function ticket_notice_output($vars)
                     $dupHours = isset($_POST['duplicate_hours']) ? (int) $_POST['duplicate_hours'] : 24;
                     if ($dupHours <= 0) { $dupHours = 24; }
                     ticket_notice_set_setting('duplicate_hours', (string) $dupHours);
-                    $kwZh = ticket_notice_decode_rules_input(isset($_POST['keyword_rules_zh']) ? (string) $_POST['keyword_rules_zh'] : '[]');
-                    $kwEn = ticket_notice_decode_rules_input(isset($_POST['keyword_rules_en']) ? (string) $_POST['keyword_rules_en'] : '[]');
+                    $kwZhInput = isset($_POST['keyword_rules_zh']) ? (string) $_POST['keyword_rules_zh'] : '[]';
+                    $kwEnInput = isset($_POST['keyword_rules_en']) ? (string) $_POST['keyword_rules_en'] : '[]';
+                    $kwZh = ticket_notice_decode_rules_input($kwZhInput);
+                    $kwEn = ticket_notice_decode_rules_input($kwEnInput);
+                    if (!is_array($kwZh)) { $kwZh = ticket_notice_parse_keyword_lines($kwZhInput, 'zh'); }
+                    if (!is_array($kwEn)) { $kwEn = ticket_notice_parse_keyword_lines($kwEnInput, 'en'); }
                     ticket_notice_set_setting('keyword_rules_zh', json_encode(is_array($kwZh) ? $kwZh : [], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
                     ticket_notice_set_setting('keyword_rules_en', json_encode(is_array($kwEn) ? $kwEn : [], JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES));
                     $message='中英文规则与智能配置已保存。';
@@ -83,8 +130,8 @@ function ticket_notice_output($vars)
     echo '<p><button type="button" class="btn btn-default" id="ticketNoticeAddRow">+ 添加规则</button> <button type="submit" class="btn btn-primary">保存双语规则</button></p>';
     echo '<hr><h4>重复工单检测配置</h4>';
     echo '<p><label><input type="checkbox" name="duplicate_enabled" ' . ($dupEnabled === 'on' ? 'checked' : '') . '> 启用重复工单拦截</label> 时间窗口(小时): <input type="number" min="1" name="duplicate_hours" value="' . htmlspecialchars((string) $dupHours, ENT_QUOTES, 'UTF-8') . '" style="width:90px"></p>';
-    echo '<h4>关键词智能规则（中文 JSON）</h4><textarea name="keyword_rules_zh" rows="6" style="width:100%;">' . htmlspecialchars((string) $kwZhCurrent, ENT_QUOTES, 'UTF-8') . '</textarea>';
-    echo '<h4>Keyword Smart Rules (English JSON)</h4><textarea name="keyword_rules_en" rows="6" style="width:100%;">' . htmlspecialchars((string) $kwEnCurrent, ENT_QUOTES, 'UTF-8') . '</textarea>';
+    echo '<h4>关键词智能规则（中文）</h4><p class="text-muted">支持两种格式：1) JSON；2) 简写行格式，例如：<code>1,2,3,4,5,6,7,8:我是答案</code></p><textarea name="keyword_rules_zh" rows="6" style="width:100%;">' . htmlspecialchars((string) $kwZhCurrent, ENT_QUOTES, 'UTF-8') . '</textarea>';
+    echo '<h4>Keyword Smart Rules (English)</h4><p class="text-muted">Supports JSON or shorthand lines: <code>dns,ttl,cloudflare:Try 8.8.8.8</code></p><textarea name="keyword_rules_en" rows="6" style="width:100%;">' . htmlspecialchars((string) $kwEnCurrent, ENT_QUOTES, 'UTF-8') . '</textarea>';
     echo '</form>';
 
     $rowsJson=json_encode($rows,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); if($rowsJson===false)$rowsJson='[]';
