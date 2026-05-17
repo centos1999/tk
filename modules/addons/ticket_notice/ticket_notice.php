@@ -1,5 +1,7 @@
 <?php
 
+use WHMCS\Database\Capsule;
+
 if (!defined('WHMCS')) {
     die('This file cannot be accessed directly');
 }
@@ -42,7 +44,7 @@ function ticket_notice_config()
     return [
         'name' => 'Ticket Notice',
         'description' => 'Show department-based reminders before ticket submission.',
-        'version' => '1.1.0',
+        'version' => '1.2.0',
         'author' => 'Custom',
         'language' => 'english',
         'fields' => [
@@ -74,9 +76,121 @@ function ticket_notice_deactivate()
     return ['status' => 'success', 'description' => 'Ticket Notice deactivated'];
 }
 
+function ticket_notice_get_stored_rules_json()
+{
+    try {
+        $row = Capsule::table('tbladdonmodules')
+            ->where('module', 'ticket_notice')
+            ->where('setting', 'rules_json')
+            ->first(['value']);
+
+        if ($row && isset($row->value) && trim((string) $row->value) !== '') {
+            return (string) $row->value;
+        }
+    } catch (\Exception $e) {
+    }
+
+    return json_encode(ticket_notice_default_rules(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+}
+
+function ticket_notice_set_stored_rules_json($json)
+{
+    $exists = Capsule::table('tbladdonmodules')
+        ->where('module', 'ticket_notice')
+        ->where('setting', 'rules_json')
+        ->exists();
+
+    if ($exists) {
+        Capsule::table('tbladdonmodules')
+            ->where('module', 'ticket_notice')
+            ->where('setting', 'rules_json')
+            ->update(['value' => $json]);
+        return;
+    }
+
+    Capsule::table('tbladdonmodules')->insert([
+        'module' => 'ticket_notice',
+        'setting' => 'rules_json',
+        'value' => $json,
+    ]);
+}
+
 function ticket_notice_output($vars)
 {
-    echo '<h3>Ticket Notice MVP</h3>';
-    echo '<p>可在本页直接配置是否启用与规则 JSON（无需改 hooks.php）。</p>';
-    echo '<p>JSON 结构示例：<code>{"1":{"title":"DNS解析提醒","items":["提示1"],"warning":"红字提醒"}}</code></p>';
+    $message = '';
+    $error = '';
+
+    if (isset($_POST['ticket_notice_visual_save']) && $_POST['ticket_notice_visual_save'] === '1') {
+        $input = isset($_POST['ticket_notice_rules_json']) ? trim((string) $_POST['ticket_notice_rules_json']) : '';
+        if ($input === '') {
+            $error = '保存失败：规则不能为空。';
+        } else {
+            $decoded = json_decode($input, true);
+            if (!is_array($decoded)) {
+                $error = '保存失败：JSON 格式无效。';
+            } else {
+                try {
+                    ticket_notice_set_stored_rules_json(json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                    $message = '规则已保存。';
+                } catch (\Exception $e) {
+                    $error = '保存失败：数据库写入异常。';
+                }
+            }
+        }
+    }
+
+    $rulesJson = ticket_notice_get_stored_rules_json();
+    $safeRulesJson = htmlspecialchars($rulesJson, ENT_QUOTES, 'UTF-8');
+
+    echo '<h3>Ticket Notice 可视化规则编辑器</h3>';
+    echo '<p>在此编辑部门提醒规则，保存后立即生效（hooks 会读取同一份 rules_json）。</p>';
+
+    if ($message !== '') {
+        echo '<div class="alert alert-success">' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</div>';
+    }
+    if ($error !== '') {
+        echo '<div class="alert alert-danger">' . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . '</div>';
+    }
+
+    echo '<form method="post" id="ticketNoticeVisualForm">';
+    echo '<input type="hidden" name="ticket_notice_visual_save" value="1">';
+    echo '<table class="table table-bordered" id="ticketNoticeRuleTable">';
+    echo '<thead><tr><th style="width:120px;">部门ID</th><th style="width:180px;">标题</th><th>提醒项（每行一条）</th><th>红字警告</th><th style="width:90px;">操作</th></tr></thead><tbody></tbody></table>';
+    echo '<p><button type="button" class="btn btn-default" id="ticketNoticeAddRow">+ 添加规则</button></p>';
+    echo '<textarea name="ticket_notice_rules_json" id="ticketNoticeRulesJson" rows="12" style="width:100%;display:none;">' . $safeRulesJson . '</textarea>';
+    echo '<p><button type="submit" class="btn btn-primary">保存规则</button></p>';
+    echo '</form>';
+
+    echo '<script>(function(){\n'
+        . 'var raw=document.getElementById("ticketNoticeRulesJson").value||"{}";\n'
+        . 'var tableBody=document.querySelector("#ticketNoticeRuleTable tbody");\n'
+        . 'function esc(v){return (v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;");}\n'
+        . 'function addRow(dept,title,items,warning){\n'
+        . 'var tr=document.createElement("tr");\n'
+        . 'tr.innerHTML="<td><input class=\"form-control tn-dept\" value=\""+esc(dept)+"\"></td>"+'
+        . '"<td><input class=\"form-control tn-title\" value=\""+esc(title)+"\"></td>"+'
+        . '"<td><textarea class=\"form-control tn-items\" rows=\"4\">"+esc((items||[]).join("\\n"))+"</textarea></td>"+'
+        . '"<td><input class=\"form-control tn-warning\" value=\""+esc(warning)+"\"></td>"+'
+        . '"<td><button type=\"button\" class=\"btn btn-danger btn-sm tn-del\">删除</button></td>";\n'
+        . 'tableBody.appendChild(tr);\n'
+        . '}\n'
+        . 'try{var obj=JSON.parse(raw);Object.keys(obj).forEach(function(k){var r=obj[k]||{};addRow(k,r.title||"",r.items||[],r.warning||"");});}catch(e){}\n'
+        . 'if(!tableBody.children.length){addRow("","",[],"");}\n'
+        . 'document.getElementById("ticketNoticeAddRow").addEventListener("click",function(){addRow("","",[],"");});\n'
+        . 'tableBody.addEventListener("click",function(e){if(e.target&&e.target.classList.contains("tn-del")){e.target.closest("tr").remove();}});\n'
+        . 'document.getElementById("ticketNoticeVisualForm").addEventListener("submit",function(e){\n'
+        . 'var data={}; var ok=true;\n'
+        . '[].slice.call(tableBody.querySelectorAll("tr")).forEach(function(tr){\n'
+        . 'var dept=(tr.querySelector(".tn-dept").value||"").trim();\n'
+        . 'if(!dept){return;}\n'
+        . 'if(!/^\\d+$/.test(dept)){ok=false; return;}\n'
+        . 'var title=(tr.querySelector(".tn-title").value||"").trim();\n'
+        . 'var warning=(tr.querySelector(".tn-warning").value||"").trim();\n'
+        . 'var items=(tr.querySelector(".tn-items").value||"").split(/\\n+/).map(function(v){return v.trim();}).filter(Boolean);\n'
+        . 'data[dept]={title:title,items:items,warning:warning};\n'
+        . '});\n'
+        . 'if(!ok){alert("部门ID必须是数字"); e.preventDefault(); return;}\n'
+        . 'document.getElementById("ticketNoticeRulesJson").value=JSON.stringify(data,null,2);\n'
+        . '});\n'
+        . '})();</script>';
 }
